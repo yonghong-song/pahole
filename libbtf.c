@@ -134,6 +134,8 @@ static const char * const btf_kind_str[NR_BTF_KINDS] = {
 	[BTF_KIND_VOLATILE]	= "VOLATILE",
 	[BTF_KIND_CONST]	= "CONST",
 	[BTF_KIND_RESTRICT]	= "RESTRICT",
+	[BTF_KIND_FUNC]		= "FUNC",
+	[BTF_KIND_FUNC_PROTO]	= "FUNC_PROTO",
 };
 
 static const char *btf__name_in_gobuf(const struct btf *btf,
@@ -203,6 +205,34 @@ static void btf_log_member(const struct btf *btf,
 	fprintf(out, "\t%s type_id=%u bits_offset=%u",
 		btf__name_in_gobuf(btf, member->name_off),
 		member->type, member->offset);
+
+	if (fmt && *fmt) {
+		va_list ap;
+
+		fprintf(out, " ");
+		va_start(ap, fmt);
+		vfprintf(out, fmt, ap);
+		va_end(ap);
+	}
+
+	fprintf(out, "\n");
+}
+
+__attribute ((format (printf, 5, 6)))
+static void btf_log_func_arg(const struct btf *btf,
+			     uint32_t name_off, uint32_t type,
+			     bool err, const char *fmt, ...)
+{
+	FILE *out;
+
+	if (!btf_verbose && !err)
+		return;
+
+	out = err ? stderr : stdout;
+
+	fprintf(out, "\t%s type_id = %u",
+		btf__name_in_gobuf(btf, name_off),
+		type);
 
 	if (fmt && *fmt) {
 		va_list ap;
@@ -339,6 +369,42 @@ int32_t btf__add_struct(struct btf *btf, uint8_t kind, uint32_t name,
 		btf__log_type(btf, &t, true,
 			      "size=%u vlen=%u Error in adding gobuffer",
 			      t.size, BTF_INFO_VLEN(t.info));
+		return -1;
+	}
+}
+
+int32_t btf__add_func_param(struct btf *btf, uint32_t name,
+			    uint32_t type)
+{
+	if (gobuffer__add(&btf->types, &type, sizeof(type)) >= 0) {
+		btf_log_func_arg(btf, name, type, false, NULL);
+		return 0;
+	} else {
+		btf_log_func_arg(btf, name, type, true, "Error in adding gobuffer");
+		return -1;
+	}
+}
+
+int32_t btf__add_func(struct btf *btf, uint32_t name, uint32_t return_type,
+		      uint16_t nr_params, bool is_proto)
+{
+	struct btf_type t;
+	int kind;
+
+	kind = is_proto ? BTF_KIND_FUNC_PROTO : BTF_KIND_FUNC;
+	t.name_off = name;
+	t.info = BTF_INFO_ENCODE(kind, 0, nr_params);
+	t.type = return_type;
+
+	++btf->type_index;
+	if (gobuffer__add(&btf->types, &t, sizeof(t)) >= 0) {
+		btf__log_type(btf, &t, false, "return_type=%u vlen=%u", t.type,
+			      BTF_INFO_VLEN(t.info));
+		return btf->type_index;
+	} else {
+		btf__log_type(btf, &t, true,
+			      "return_type=%u vlen=%u Error in adding gobuffer",
+			      t.type, BTF_INFO_VLEN(t.info));
 		return -1;
 	}
 }

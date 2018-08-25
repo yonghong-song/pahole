@@ -72,6 +72,23 @@ static int32_t enumeration_type__encode(struct btf *btf, struct tag *tag)
 	return type_id;
 }
 
+static int32_t func_type__encode(struct btf *btf, int name, struct ftype *ftype,
+				 bool is_proto)
+{
+	int32_t type_id, nr_params;
+	struct parameter *param;
+
+	nr_params = ftype->nr_parms + (ftype->unspec_parms ? 1 : 0);
+	type_id = btf__add_func(btf, name, ftype->tag.type, nr_params, is_proto);
+
+	ftype__for_each_parameter(ftype, param)
+		btf__add_func_param(btf, param->name, param->tag.type);
+	if (ftype->unspec_parms)
+		btf__add_func_param(btf, 0, 0);
+
+	return type_id;
+}
+
 static int tag__encode_btf(struct tag *tag, uint32_t core_id, struct btf *btf,
 			   uint32_t array_index_id)
 {
@@ -106,10 +123,7 @@ static int tag__encode_btf(struct tag *tag, uint32_t core_id, struct btf *btf,
 	case DW_TAG_enumeration_type:
 		return enumeration_type__encode(btf, tag);
 	case DW_TAG_subroutine_type:
-		/* A dummy void * to avoid a shift in btf->type_index */
-		btf_verbose_log("Filling unsupported DW_TAG_%s(0x%x) with void *\n",
-				dwarf_tag_name(tag->tag), tag->tag);
-		return btf__add_ref_type(btf, BTF_KIND_PTR, 0, 0);
+		return func_type__encode(btf, 0, tag__ftype(tag), true);
 	default:
 		fprintf(stderr, "Unsupported DW_TAG_%s(0x%x)\n",
 			dwarf_tag_name(tag->tag), tag->tag);
@@ -126,6 +140,7 @@ extern struct strings *strings;
 int cu__encode_btf(struct cu *cu, int verbose)
 {
 	struct btf *btf = btf__new(cu->filename, cu->elf);
+	struct function *func;
 	struct tag *pos;
 	uint32_t core_id, array_index_id;
 	uint16_t id;
@@ -152,9 +167,10 @@ int cu__encode_btf(struct cu *cu, int verbose)
 			err = -1;
 			goto out;
 		}
-
-		id = btf_type_id;
 	}
+
+	cu__for_each_function(cu, core_id, func)
+		func_type__encode(btf, func->name, &func->proto, false);
 
 	if (array_index_id == cu->types_table.nr_entries) {
 		struct base_type bt = {};
