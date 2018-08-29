@@ -4,6 +4,7 @@
 #include "gobuffer.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 struct btf {
 	union {
@@ -38,6 +39,10 @@ int btf__add_member(struct btf *btf, uint32_t name, uint32_t type,
 		    uint32_t bit_offset);
 int32_t btf__add_struct(struct btf *btf, uint8_t kind, uint32_t name,
 			uint32_t size, uint16_t nr_members);
+int32_t btf__add_func_param(struct btf *btf, uint32_t name,
+			    uint32_t type);
+int32_t btf__add_func(struct btf *btf, uint32_t name, uint32_t return_type,
+		      uint16_t nr_params, bool is_proto);
 int32_t btf__add_array(struct btf *btf, uint32_t type, uint32_t index_type,
 		       uint32_t nelems);
 int32_t btf__add_enum(struct btf *btf, uint32_t name, uint32_t size,
