@@ -576,7 +576,8 @@ int btf__encode(struct btf *btf, uint8_t flags)
 	hdr->str_len  = gobuffer__size(btf->strings);
 
 	gobuffer__copy(&btf->types, btf__nohdr_data(btf) + hdr->type_off);
-	gobuffer__copy(btf->strings, btf__nohdr_data(btf) + hdr->str_off);
+	if (gobuffer__size(btf->strings) > 1)
+		gobuffer__copy(btf->strings, btf__nohdr_data(btf) + hdr->str_off);
 
 	*(char *)(btf__nohdr_data(btf) + hdr->str_off) = '\0';
 
