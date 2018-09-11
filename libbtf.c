@@ -549,9 +549,18 @@ out:
 int btf__encode(struct btf *btf, uint8_t flags)
 {
 	struct btf_header *hdr;
+	static int cnt;
+	static long type_len, str_len;
 
 	/* Empty file, nothing to do, so... done! */
 	if (gobuffer__size(&btf->types) == 0)
+		return 0;
+	cnt++;
+	type_len += gobuffer__size(&btf->types);
+	str_len += gobuffer__size(btf->strings);
+	fprintf(stderr, "cnt = %d, type_len = 0x%lx, str_len = 0x%lx\n", cnt,
+		type_len, str_len);
+	if (1)
 		return 0;
 
 	btf->size = sizeof(*hdr) +

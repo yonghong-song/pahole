@@ -1115,7 +1115,7 @@ static enum load_steal_kind pahole_stealer(struct cu *cu,
 
 	if (btf_encode) {
 		cu__encode_btf(cu, global_verbose);
-		goto dump_and_stop;
+		goto filter_it;
 	}
 
 	if (ctf_encode) {
