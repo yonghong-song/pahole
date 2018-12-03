@@ -24,12 +24,25 @@ static int32_t structure_type__encode(struct btf *btf, struct tag *tag)
 {
 	struct type *type = tag__type(tag);
 	struct class_member *pos;
+	bool kind_flag = false;
 	int32_t type_id;
 	uint8_t kind;
 
 	kind = (tag->tag == DW_TAG_union_type) ?
 		BTF_KIND_UNION : BTF_KIND_STRUCT;
+
+	/* kind_flag only set where there is a bitfield in the struct */
+	if (no_bitfield_type_recode) {
+		type__for_each_data_member(type, pos) {
+			if (pos->bitfield_size) {
+				kind_flag = true;
+				break;
+			}
+		}
+	}
+
 	type_id = btf__add_struct(btf, kind, type->namespace.name,
+				  kind_flag,
 				  type->size, type->nr_members);
 	if (type_id < 0)
 		return type_id;
@@ -60,7 +73,8 @@ static int32_t structure_type__encode(struct btf *btf, struct tag *tag)
 				     pos->bitfield_size;
 
 		if (btf__add_member(btf, pos->name, pos->tag.type,
-				    bit_offset))
+				    kind_flag,
+				    pos->bitfield_size, bit_offset))
 			return -1;
 	}
 
@@ -113,22 +127,23 @@ static int tag__encode_btf(struct tag *tag, uint32_t core_id, struct btf *btf,
 	case DW_TAG_base_type:
 		return btf__add_base_type(btf, tag__base_type(tag));
 	case DW_TAG_const_type:
-		return btf__add_ref_type(btf, BTF_KIND_CONST, tag->type, 0);
+		return btf__add_ref_type(btf, BTF_KIND_CONST, tag->type, 0, false);
 	case DW_TAG_pointer_type:
-		return btf__add_ref_type(btf, BTF_KIND_PTR, tag->type, 0);
+		return btf__add_ref_type(btf, BTF_KIND_PTR, tag->type, 0, false);
 	case DW_TAG_restrict_type:
-		return btf__add_ref_type(btf, BTF_KIND_RESTRICT, tag->type, 0);
+		return btf__add_ref_type(btf, BTF_KIND_RESTRICT, tag->type, 0, false);
 	case DW_TAG_volatile_type:
-		return btf__add_ref_type(btf, BTF_KIND_VOLATILE, tag->type, 0);
+		return btf__add_ref_type(btf, BTF_KIND_VOLATILE, tag->type, 0, false);
 	case DW_TAG_typedef:
 		return btf__add_ref_type(btf, BTF_KIND_TYPEDEF, tag->type,
-					 tag__namespace(tag)->name);
+					 tag__namespace(tag)->name, false);
 	case DW_TAG_structure_type:
 	case DW_TAG_union_type:
 	case DW_TAG_class_type:
 		if (tag__type(tag)->declaration)
 			return btf__add_ref_type(btf, BTF_KIND_FWD, 0,
-						 tag__namespace(tag)->name);
+						 tag__namespace(tag)->name,
+						 tag->tag == DW_TAG_union_type);
 		else
 			return structure_type__encode(btf, tag);
 	case DW_TAG_array_type:
@@ -143,7 +158,7 @@ static int tag__encode_btf(struct tag *tag, uint32_t core_id, struct btf *btf,
 		/* A dummy void * to avoid a shift in btf->type_index */
 		btf_verbose_log("Filling unsupported DW_TAG_%s(0x%x) with void *\n",
 				dwarf_tag_name(tag->tag), tag->tag);
-		return btf__add_ref_type(btf, BTF_KIND_PTR, 0, 0);
+		return btf__add_ref_type(btf, BTF_KIND_PTR, 0, 0, false);
 	default:
 		fprintf(stderr, "Unsupported DW_TAG_%s(0x%x)\n",
 			dwarf_tag_name(tag->tag), tag->tag);

@@ -34,7 +34,9 @@ struct btf_type {
 	 * bits  0-15: vlen (e.g. # of struct's members)
 	 * bits 16-23: unused
 	 * bits 24-27: kind (e.g. int, ptr, array...etc)
-	 * bits 28-31: unused
+	 * bits 28-30: unused
+	 * bit     31: kind_flag, currently used by
+	 *             struct, union and fwd
 	 */
 	__u32 info;
 	/* "size" is used by INT, ENUM, STRUCT and UNION.
@@ -51,6 +53,7 @@ struct btf_type {
 
 #define BTF_INFO_KIND(info)	(((info) >> 24) & 0x0f)
 #define BTF_INFO_VLEN(info)	((info) & 0xffff)
+#define BTF_INFO_KFLAG(info)	((info) >> 31)
 
 #define BTF_KIND_UNKN		0	/* Unknown	*/
 #define BTF_KIND_INT		1	/* Integer	*/
@@ -107,7 +110,16 @@ struct btf_array {
 struct btf_member {
 	__u32	name_off;
 	__u32	type;
-	__u32	offset;	/* offset in bits */
+	__u32	offset;	/* [bitfield_size and] offset in bits */
 };
+
+/*
+ * If the type info kind_flag set, the btf_member.offset
+ * contains both member bit offset and bitfield size, and
+ * bitfield size will set for struct/union bitfield members.
+ * Otherwise, it contains only bit offset.
+ */
+#define BTF_MEMBER_BITFIELD_SIZE(val)	((val) >> 24)
+#define BTF_MEMBER_BIT_OFFSET(val)	((val) & 0xffffff)
 
 #endif /* _UAPI__LINUX_BTF_H__ */
